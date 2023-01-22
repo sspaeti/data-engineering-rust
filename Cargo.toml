@@ -1,0 +1,20 @@
+[package]
+name = "duckdb-playground"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.duckdb]
+version = "0.5.1"
+features = ["bundled"]
+
+# [dependencies.libduckdb-sys]
+# path = "libduckdb-sys"
+# version = "0.5.0"
+
+[dependencies]
+libduckdb-sys = "0.5.1"
+# duckdb = "0.5.1"
+# arrow = { version = "24", default-features = false, features = ["ffi"] }
+arrow = { version = "23", features = ["prettyprint", "ffi"] }
