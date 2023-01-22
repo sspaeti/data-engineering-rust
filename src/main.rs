@@ -9,11 +9,22 @@ struct Person {
     data: Option<Vec<u8>>,
 }
 
+fn connect_duckdb(path: &str) -> Result<Connection> {
+    //If the database file does not exist, it will be created (the file extension may be .db, .duckdb, or anything else).
+    let conn = Connection::open(&path);
+    // println!("{}", conn.is_autocommit());
+    Ok(conn.unwrap())
+}
+
+
 fn main() -> Result<()> {
-    let conn = Connection::open_in_memory()?;
+    // let conn = Connection::ope
+
+    let conn = connect_duckdb("/tmp/duckdb-rs/test.duckdb")?;
+
 
     conn.execute_batch(
-        r"CREATE SEQUENCE seq;
+        r"CREATE SEQUENCE IF NOT EXISTS seq;
           CREATE TABLE person (
                   id              INTEGER PRIMARY KEY DEFAULT NEXTVAL('seq'),
                   name            TEXT NOT NULL,
@@ -32,7 +43,7 @@ fn main() -> Result<()> {
     )?;
 
     // query table by rows
-    let mut stmt = conn.prepare("SELECT id, name, data FROM erson")?;
+    let mut stmt = conn.prepare("SELECT id, name, data FROM person")?;
     let person_iter = stmt.query_map([], |row| {
         Ok(Person {
             id: row.get(0)?,
@@ -45,10 +56,11 @@ fn main() -> Result<()> {
         println!("Found person {:?}", person.unwrap());
     }
 
-    // query table by arrow
-    let rbs: Vec<RecordBatch> = stmt.query_arrow([])?.collect();
-    print_batches(&rbs).unwrap();
     Ok(())
+    // // query table by arrow
+    // let rbs: Vec<RecordBatch> = stmt.query_arrow([])?.collect();
+    // print_batches(&rbs).unwrap();
+    // Ok(())
 
     // // query table by arrow
     // let frames = stmt.query_arrow(duckdb::params![])?;
