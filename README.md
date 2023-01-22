@@ -12,6 +12,6 @@ I might read all my bank transactions to create a personal DWH to overview my fi
 Build and run with:
 ```
 cargo build
-cargo install
+cargo run
 ```
 
