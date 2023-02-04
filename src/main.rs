@@ -1,3 +1,6 @@
+
+use std::process::Command;
+
 use duckdb::{Connection, Result};
 // use chrono::{DateTime, Utc};
 use chrono::NaiveDate;
@@ -63,8 +66,10 @@ fn connect_duckdb(path: &str) -> Result<Connection> {
 fn main() -> Result<()> {
 
     let path_data = "/Users/sspaeti/Documents/duckdbs/duckdb-rs/";
+    let path_data_bekb = "/Users/sspaeti/Simon/Sync/1 Areas/Finance/Bank/Kontoauszüge/_export/bekb/test/";
+    // let path_data_bekb = "/Users/sspaeti/Simon/Sync/1 Areas/Finance/Bank/Kontoauszüge/_export/bekb/";
     let post_fix_csv = "test-data/test.csv";
-    let table_name = "bekb_transactions";
+    let table_name_bekb = "bekb_transactions";
 
     let conn = connect_duckdb(&format!("{}{}", path_data, "test.duckdb"))?;
 
@@ -84,47 +89,98 @@ fn main() -> Result<()> {
             ,\"amount_chf\"                    DOUBLE 
             ,\"saldo_chf\"                     DOUBLE 
          ); 
-    ", table_name))?;
+    ", table_name_bekb))?;
+    
+    // iterate over all xls files and convert to csv
+    let paths = std::fs::read_dir(&path_data_bekb).unwrap();
+    for path in paths {
+        //print path
+        let filepath = path.unwrap().path();
+        let filename = filepath.display().to_string();
+        let filetype = filepath.extension().unwrap().to_str().unwrap();
 
-    conn.execute_batch(&format!(r"COPY {} from '{}{}' (auto_detect true);", table_name, path_data, post_fix_csv))?;
+        if filetype == "xls" {
 
-    // query table by rows
-    let mut stmt = conn.prepare(&format!("
-        SELECT 
-             COALESCE(credit_advice, NULL, '') as credit_advice
-            ,transaction_date
-            ,posting_date
-            ,COALESCE(description, NULL, '') as description
-            ,COALESCE(additional_info, NULL, '') as additional_info
-            ,COALESCE(merchant_name, NULL, '') as merchant_name
-            ,COALESCE(merchant_address, NULL, '') as merchant_address
-            ,COALESCE(merchant_bank, NULL, '') as merchant_bank
-            ,COALESCE(reference_number, NULL, '') as reference_number
-            ,COALESCE(additional_info_transaction, NULL, '') as additional_info_transaction
-            ,COALESCE(amount_chf, NULL, 0) as amount_chf
-            ,COALESCE(saldo_chf, NULL, 0) as saldo_chf
-        FROM {};", table_name))?;
+            println!("converting to csv: {:?} ..", filename);
 
-    let transaction_iter = stmt.query_map([], |row| {
-        Ok(BekbTransaction {
-            credit_advice: row.get("credit_advice")?,
-            transaction_date: NaiveDate::from_ymd(row.get("transaction_date")?, 1, 1),
-            posting_date: NaiveDate::from_ymd(row.get("posting_date")?, 1, 1),
-            description: row.get("description")?,
-            additional_info: row.get("additional_info")?,
-            merchant_name: row.get("merchant_name")?,
-            merchant_address: row.get("merchant_address")?,
-            merchant_bank: row.get("merchant_bank")?,
-            reference_number: row.get("reference_number")?,
-            additional_info_transaction: row.get("additional_info_transaction")?,
-            amount_chf: row.get("amount_chf")?,
-            saldo_chf: row.get("saldo_chf")?,
-        })
-    })?;
+            // use openoffice cmd line tool unoconv (`brew install unoconv`)
+            let output = Command::new("sh")
+                        .arg("-c")
+                        .arg(&format!("unoconv -f csv \"{}\"", filename))
+                        .output()
+                        .expect("failed to execute process");
 
-    for transaction in transaction_iter {
-            println!("{}", transaction.unwrap());
+            let output_stdout = output.stdout;
+            //print if not empty
+            if !output_stdout.is_empty() {
+                println!("stdout: {}", String::from_utf8_lossy(&output_stdout));
+            }
         }
+    }
+
+
+    // iterate over all csv files and load into duckdb
+    let paths = std::fs::read_dir(&path_data_bekb).unwrap();
+    for path in paths {
+        //print path
+        let filepath = path.unwrap().path();
+        let filename = filepath.display().to_string();
+        let filetype = filepath.extension().unwrap().to_str().unwrap();
+
+        if filetype == "csv" {
+            println!("Inserting csv file to table `{}`: {:?} ..", table_name_bekb, filename);
+            conn.execute_batch(&format!(r"COPY {} from '{}' (auto_detect true);", table_name_bekb, filename))?;
+        }
+    }
+    
+    // count rows
+    let mut stmt = conn.prepare(&format!("
+        SELECT count(*) as cnt
+        FROM {};", table_name_bekb))?;
+
+    //execute stmt.query_row() and print count
+    let cnt: i64 = stmt.query_row([], |row| row.get(0))?;
+    println!("{} rows in table {}", cnt, table_name_bekb);
+
+
+    // // query table by rows
+    // let mut stmt = conn.prepare(&format!("
+    //     SELECT 
+    //          COALESCE(credit_advice, NULL, '') as credit_advice
+    //         ,transaction_date
+    //         ,posting_date
+    //         ,COALESCE(description, NULL, '') as description
+    //         ,COALESCE(additional_info, NULL, '') as additional_info
+    //         ,COALESCE(merchant_name, NULL, '') as merchant_name
+    //         ,COALESCE(merchant_address, NULL, '') as merchant_address
+    //         ,COALESCE(merchant_bank, NULL, '') as merchant_bank
+    //         ,COALESCE(reference_number, NULL, '') as reference_number
+    //         ,COALESCE(additional_info_transaction, NULL, '') as additional_info_transaction
+    //         ,COALESCE(amount_chf, NULL, 0) as amount_chf
+    //         ,COALESCE(saldo_chf, NULL, 0) as saldo_chf
+    //     FROM {};", table_name_bekb))?;
+
+    // let transaction_iter = stmt.query_map([], |row| {
+    //     Ok(BekbTransaction {
+    //         credit_advice: row.get("credit_advice")?,
+    //         transaction_date: NaiveDate::from_ymd(row.get("transaction_date")?, 1, 1),
+    //         posting_date: NaiveDate::from_ymd(row.get("posting_date")?, 1, 1),
+    //         description: row.get("description")?,
+    //         additional_info: row.get("additional_info")?,
+    //         merchant_name: row.get("merchant_name")?,
+    //         merchant_address: row.get("merchant_address")?,
+    //         merchant_bank: row.get("merchant_bank")?,
+    //         reference_number: row.get("reference_number")?,
+    //         additional_info_transaction: row.get("additional_info_transaction")?,
+    //         amount_chf: row.get("amount_chf")?,
+    //         saldo_chf: row.get("saldo_chf")?,
+    //     })
+    // })?;
+
+    // for transaction in transaction_iter {
+    //         println!("{}", transaction.unwrap());
+    //     }
+
 
     Ok(())
 
