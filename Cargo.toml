@@ -15,6 +15,7 @@ features = ["bundled"]
 
 [dependencies]
 libduckdb-sys = "0.6.1"
+chrono = "0.4.19"
 # duckdb = "0.5.1"
 # arrow = { version = "24", default-features = false, features = ["ffi"] }
 arrow = { version = "31", features = ["prettyprint", "ffi"] }
